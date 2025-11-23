@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "Enhanced C3",
+  "version": "1.0.0",
+  "description": "Handy shortcuts for C3",
+  "permissions": ["clipboardWrite", "storage", "activeTab", "scripting"],
+  "icons": {
+    "16": "icon.png",
+    "48": "icon.png",
+    "128": "icon.png"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "",
+    "default_icon": "icon.png"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://*/*", "http://*/*"],
+      "js": ["content.js"],
+      "css": ["style.css"]
+    }
+  ]
+}

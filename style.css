@@ -1,0 +1,38 @@
+.quote-wrapper {
+  display: inline-flex;
+  position: relative;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px;
+  border-radius: 6px;
+  transition: background 0.2s ease-in-out;
+}
+
+.quote-wrapper:hover {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.copy-btn {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  padding: 1px 4px;
+  font-size: 11px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  /* apply opacity only to background */
+  background: rgba(103, 113, 255, 0.2);
+  color: white;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.copy-btn:hover {
+  background: #357abd;
+}
+
+.copy-icon {
+  font-size: 10px;
+}
