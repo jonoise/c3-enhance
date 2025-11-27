@@ -27,30 +27,68 @@
     if (anchor.dataset.hasCopyBtn === 'true') return
     anchor.dataset.hasCopyBtn = 'true'
 
-    // Wrap the anchor so the button can be absolutely positioned
+    // Find the first span (property name)
+    const nameSpan = anchor.querySelector('span[itemprop="name"]')
+    if (!nameSpan) return
+
+    // Create wrapper for the name span
     const wrapper = document.createElement('span')
     wrapper.style.position = 'relative'
     wrapper.style.display = 'inline-block'
+    wrapper.style.marginRight = '8px'
 
-    anchor.parentNode.insertBefore(wrapper, anchor)
-    wrapper.appendChild(anchor)
+    nameSpan.parentNode.insertBefore(wrapper, nameSpan)
+    wrapper.appendChild(nameSpan)
 
     // Create copy button
     const btn = document.createElement('button')
     btn.className = 'copy-btn address-copy-btn'
-    btn.style.position = 'absolute'
-    btn.style.right = '-30px'
-    btn.style.top = '50%'
-    btn.style.transform = 'translateY(-50%)'
+    btn.style.marginLeft = '8px'
+    btn.style.verticalAlign = 'middle'
     btn.innerHTML = `<span class="copy-icon">📋</span>`
 
     wrapper.appendChild(btn)
 
-    btn.addEventListener('click', () => {
-      const spans = anchor.querySelectorAll('span')
-      const text = [...spans].map((s) => s.textContent.trim()).join(' ')
+    btn.addEventListener('click', (e) => {
+      e.preventDefault() // Prevent anchor navigation
 
-      navigator.clipboard.writeText(text)
+      // Get property name
+      const propertyName = nameSpan.textContent.trim()
+
+      // Get address components
+      const streetSpan = anchor.querySelector(
+        'span[data-selenium-id="address_street"]'
+      )
+      const citySpan = anchor.querySelector(
+        'span[data-selenium-id="address_city"]'
+      )
+      const stateSpan = anchor.querySelector(
+        'span[data-selenium-id="address_state"]'
+      )
+      const zipSpan = anchor.querySelector(
+        'span[data-selenium-id="address_zip"]'
+      )
+
+      // Build address string
+      const addressParts = []
+
+      if (propertyName) addressParts.push(propertyName)
+      if (streetSpan)
+        addressParts.push(streetSpan.textContent.trim().replace(/\s+/g, ' '))
+
+      // Combine city, state, zip on one line
+      const cityStateZip = []
+      if (citySpan) cityStateZip.push(citySpan.textContent.trim())
+      if (stateSpan) cityStateZip.push(stateSpan.textContent.trim())
+      if (zipSpan) cityStateZip.push(zipSpan.textContent.trim())
+
+      if (cityStateZip.length > 0) {
+        addressParts.push(cityStateZip.join(' '))
+      }
+
+      const fullAddress = addressParts.join('\n')
+
+      navigator.clipboard.writeText(fullAddress)
 
       btn.innerHTML = '✅'
       setTimeout(
@@ -59,7 +97,6 @@
       )
     })
   }
-
   function copyResidentInfo() {
     const target = document.getElementById('resinfodiv')
     if (!target) return
@@ -111,8 +148,9 @@
     let currentNode = boldElement.nextSibling
     let addressLines = []
     let currentLine = ''
+    let phoneNodes = [] // Store phone info for later processing
 
-    // Collect address content until we hit phone numbers or next <b> tag
+    // First pass: collect ALL content including phones
     while (currentNode) {
       if (currentNode.nodeName === 'B') {
         break
@@ -121,26 +159,21 @@
       if (currentNode.nodeType === Node.TEXT_NODE) {
         const text = currentNode.textContent.trim()
 
-        // Check if this line contains a phone label (Mobile:, Office:, Home:)
+        // Check if this line contains a phone label
         const phoneMatch = text.match(/^(Mobile|Office|Home):\s*(.+)/)
         if (phoneMatch) {
-          // Stop collecting address lines
-          if (currentLine) {
-            addressLines.push(currentLine)
-            currentLine = ''
+          // Store phone info for later
+          phoneNodes.push({
+            node: currentNode,
+            label: phoneMatch[1],
+            number: phoneMatch[2].trim(),
+          })
+
+          // Add the full text to currentLine so it gets preserved in address
+          if (text) {
+            currentLine += (currentLine ? ' ' : '') + text
           }
-
-          // Add copy button for this phone number
-          const phoneLabel = phoneMatch[1]
-          const phoneNumber = phoneMatch[2].trim()
-          addPhoneCopyButton(currentNode, phoneLabel, phoneNumber)
-
-          // Continue to next node to process remaining phones
-          currentNode = currentNode.nextSibling
-          continue
-        }
-
-        if (text) {
+        } else if (text) {
           currentLine += (currentLine ? ' ' : '') + text
         }
       } else if (currentNode.nodeName === 'BR') {
@@ -153,19 +186,38 @@
       currentNode = currentNode.nextSibling
     }
 
-    // Don't forget the last address line if there's no trailing <br>
-    if (currentLine && !currentLine.match(/^(Mobile|Office|Home):/)) {
+    // Don't forget the last line
+    if (currentLine) {
       addressLines.push(currentLine)
     }
 
-    const fullAddress = addressLines.join('\n')
+    // Separate address from phone numbers
+    const addressOnlyLines = []
+    for (const line of addressLines) {
+      // If line contains phone pattern, stop adding to address
+      if (line.match(/^(Mobile|Office|Home):/)) {
+        break
+      }
+      addressOnlyLines.push(line)
+    }
 
+    const fullAddress = addressOnlyLines.join('\n')
+
+    // Add copy button for address
     if (fullAddress) {
       addCopyButton(boldElement, fullAddress)
     }
+
+    // Now add copy buttons for each phone number
+    phoneNodes.forEach((phoneInfo) => {
+      addPhoneCopyButton(phoneInfo.node, phoneInfo.label, phoneInfo.number)
+    })
   }
 
   function addPhoneCopyButton(textNode, label, phoneNumber) {
+    // Check if we already processed this node
+    if (textNode.dataset && textNode.dataset.processed === 'true') return
+
     // Create a wrapper span to hold the formatted content
     const wrapper = document.createElement('span')
     wrapper.style.position = 'relative'
@@ -186,8 +238,10 @@
     wrapper.appendChild(btn)
 
     // Replace the text node with our wrapper
-    textNode.parentNode.insertBefore(wrapper, textNode)
-    textNode.textContent = '' // Clear original text
+    if (textNode.parentNode) {
+      textNode.parentNode.insertBefore(wrapper, textNode)
+      textNode.parentNode.removeChild(textNode) // Remove the old text node completely
+    }
 
     btn.addEventListener('click', () => {
       navigator.clipboard.writeText(phoneNumber)
