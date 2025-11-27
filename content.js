@@ -241,14 +241,12 @@
       const wrapper = document.createElement('div')
       wrapper.style.position = 'relative'
       wrapper.style.display = 'inline-block'
-      wrapper.style.width = '100%'
 
       ta.parentNode.insertBefore(wrapper, ta)
       wrapper.appendChild(ta)
 
       // cog icon button
       const btn = document.createElement('button')
-      btn.className = 'textarea-cog-btn'
       btn.innerHTML = '⚙️'
       btn.style.position = 'absolute'
       btn.style.top = '-26px'
@@ -259,6 +257,7 @@
       btn.style.background = '#fff'
       btn.style.border = '1px solid #ccc'
       btn.style.borderRadius = '4px'
+      btn.type = 'button'
 
       wrapper.appendChild(btn)
 
