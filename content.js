@@ -111,7 +111,7 @@
       const fieldName = bold.textContent.trim()
 
       // Special handling for Unit field
-      if (fieldName === 'Unit') {
+      if (fieldName === 'Unit:') {
         handleUnitField(bold)
       } else {
         handleStandardField(bold)
