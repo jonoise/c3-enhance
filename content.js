@@ -143,108 +143,129 @@
       addCopyButton(boldElement, textContent)
     }
   }
-
   function handleUnitField(boldElement) {
-    let currentNode = boldElement.nextSibling
-    let addressLines = []
-    let currentLine = ''
-    let phoneNodes = [] // Store phone info for later processing
+    // Check if already processed
+    if (boldElement.dataset.unitProcessed === 'true') return
+    boldElement.dataset.unitProcessed = 'true'
 
-    // First pass: collect ALL content including phones
+    let currentNode = boldElement.nextSibling
+    let addressTexts = [] // Collect address lines
+    let addressNodes = [] // Track nodes to remove later
+
+    // Process all nodes until we hit another <b> tag
     while (currentNode) {
+      const nextNode = currentNode.nextSibling
+
+      // Stop if we hit another <b> tag
       if (currentNode.nodeName === 'B') {
         break
       }
 
+      // If it's a text node with actual content
       if (currentNode.nodeType === Node.TEXT_NODE) {
         const text = currentNode.textContent.trim()
 
-        // Check if this line contains a phone label
-        const phoneMatch = text.match(/^(Mobile|Office|Home):\s*(.+)/)
-        if (phoneMatch) {
-          // Store phone info for later
-          phoneNodes.push({
-            node: currentNode,
-            label: phoneMatch[1],
-            number: phoneMatch[2].trim(),
-          })
+        if (text) {
+          // Check if it's a phone line
+          const isPhoneLine = /^(Mobile|Home|Office|Fax):/i.test(text)
 
-          // Add the full text to currentLine so it gets preserved in address
-          if (text) {
-            currentLine += (currentLine ? ' ' : '') + text
+          if (isPhoneLine) {
+            // First, wrap any accumulated address text
+            if (addressTexts.length > 0) {
+              wrapAddressGroup(boldElement, addressTexts, addressNodes)
+              addressTexts = []
+              addressNodes = []
+            }
+
+            // Then handle this phone line separately
+            wrapPhoneLine(currentNode, text)
+          } else {
+            // Accumulate address text
+            addressTexts.push(text)
+            addressNodes.push(currentNode)
           }
-        } else if (text) {
-          currentLine += (currentLine ? ' ' : '') + text
-        }
-      } else if (currentNode.nodeName === 'BR') {
-        if (currentLine) {
-          addressLines.push(currentLine)
-          currentLine = ''
         }
       }
 
-      currentNode = currentNode.nextSibling
+      currentNode = nextNode
     }
 
-    // Don't forget the last line
-    if (currentLine) {
-      addressLines.push(currentLine)
+    // Wrap any remaining address text
+    if (addressTexts.length > 0) {
+      wrapAddressGroup(boldElement, addressTexts, addressNodes)
     }
-
-    // Separate address from phone numbers
-    const addressOnlyLines = []
-    for (const line of addressLines) {
-      // If line contains phone pattern, stop adding to address
-      if (line.match(/^(Mobile|Office|Home):/)) {
-        break
-      }
-      addressOnlyLines.push(line)
-    }
-
-    const fullAddress = addressOnlyLines.join('\n')
-
-    // Add copy button for address
-    if (fullAddress) {
-      addCopyButton(boldElement, fullAddress)
-    }
-
-    // Now add copy buttons for each phone number
-    phoneNodes.forEach((phoneInfo) => {
-      addPhoneCopyButton(phoneInfo.node, phoneInfo.label, phoneInfo.number)
-    })
   }
 
-  function addPhoneCopyButton(textNode, label, phoneNumber) {
-    // Check if we already processed this node
-    if (textNode.dataset && textNode.dataset.processed === 'true') return
+  function wrapAddressGroup(boldElement, texts, nodes) {
+    if (texts.length === 0 || nodes.length === 0) return
 
-    // Create a wrapper span to hold the formatted content
-    const wrapper = document.createElement('span')
-    wrapper.style.position = 'relative'
-    wrapper.style.display = 'inline-block'
+    const fullAddress = texts.join('\n')
 
-    // Create label span
-    const labelSpan = document.createElement('span')
-    labelSpan.textContent = `${label}: ${phoneNumber}`
+    // Create span for the address group
+    const span = document.createElement('span')
+    span.className = 'unit-address-group'
+    span.style.position = 'relative'
+    span.style.display = 'inline'
+    span.textContent = texts[0] // Start with first line
 
-    // Create copy button
+    // Replace the first text node with the span
+    nodes[0].parentNode.insertBefore(span, nodes[0])
+
+    // Add remaining lines with <br> inside the span
+    for (let i = 1; i < texts.length; i++) {
+      span.appendChild(document.createElement('br'))
+      span.appendChild(document.createTextNode(texts[i]))
+    }
+
+    // Remove all original text nodes
+    nodes.forEach((node) => {
+      if (node.parentNode) {
+        node.parentNode.removeChild(node)
+      }
+    })
+
+    // Create copy button inside the span
     const btn = document.createElement('button')
-    btn.className = 'copy-btn phone-copy-btn'
+    btn.className = 'copy-btn unit-address-copy-btn'
     btn.style.marginLeft = '8px'
     btn.style.verticalAlign = 'middle'
     btn.innerHTML = `<span class="copy-icon">📋</span>`
 
-    wrapper.appendChild(labelSpan)
-    wrapper.appendChild(btn)
-
-    // Replace the text node with our wrapper
-    if (textNode.parentNode) {
-      textNode.parentNode.insertBefore(wrapper, textNode)
-      textNode.parentNode.removeChild(textNode) // Remove the old text node completely
-    }
+    span.appendChild(btn)
 
     btn.addEventListener('click', () => {
-      navigator.clipboard.writeText(phoneNumber)
+      navigator.clipboard.writeText(fullAddress)
+      btn.innerHTML = '✅'
+      setTimeout(
+        () => (btn.innerHTML = `<span class="copy-icon">📋</span>`),
+        1000
+      )
+    })
+  }
+
+  function wrapPhoneLine(textNode, text) {
+    // Create span for phone line
+    const span = document.createElement('span')
+    span.className = 'unit-phone-item'
+    span.style.position = 'relative'
+    span.style.display = 'inline'
+    span.textContent = text
+
+    // Replace text node with span
+    textNode.parentNode.insertBefore(span, textNode)
+    textNode.parentNode.removeChild(textNode)
+
+    // Create copy button inside the span
+    const btn = document.createElement('button')
+    btn.className = 'copy-btn unit-phone-copy-btn'
+    btn.style.marginLeft = '8px'
+    btn.style.verticalAlign = 'middle'
+    btn.innerHTML = `<span class="copy-icon">📋</span>`
+
+    span.appendChild(btn)
+
+    btn.addEventListener('click', () => {
+      navigator.clipboard.writeText(text)
       btn.innerHTML = '✅'
       setTimeout(
         () => (btn.innerHTML = `<span class="copy-icon">📋</span>`),
