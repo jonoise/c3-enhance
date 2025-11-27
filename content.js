@@ -64,67 +64,168 @@
     const target = document.getElementById('resinfodiv')
     if (!target) return
 
-    function processNode(node) {
-      if (node.nodeType === Node.TEXT_NODE) {
-        const text = node.textContent
-        const regex = /"([^\"]+)"/g
+    // Prevent double processing
+    if (target.dataset.processed === 'true') return
+    target.dataset.processed = 'true'
 
-        let match
-        let fragments = []
-        let lastIndex = 0
+    const boldElements = target.querySelectorAll('b')
 
-        while ((match = regex.exec(text)) !== null) {
-          const quoted = match[1]
+    boldElements.forEach((bold) => {
+      const fieldName = bold.textContent.trim()
 
-          if (match.index > lastIndex) {
-            fragments.push(
-              document.createTextNode(text.slice(lastIndex, match.index))
-            )
+      // Special handling for Unit field
+      if (fieldName === 'Unit') {
+        handleUnitField(bold)
+      } else {
+        handleStandardField(bold)
+      }
+    })
+  }
+
+  function handleStandardField(boldElement) {
+    let currentNode = boldElement.nextSibling
+    let textContent = ''
+
+    // Collect text until we hit a <br>, another <b>, or end of content
+    while (currentNode) {
+      if (currentNode.nodeType === Node.TEXT_NODE) {
+        const text = currentNode.textContent.trim()
+        if (text) {
+          textContent += (textContent ? ' ' : '') + text
+        }
+      } else if (
+        currentNode.nodeName === 'BR' ||
+        currentNode.nodeName === 'B'
+      ) {
+        break
+      }
+      currentNode = currentNode.nextSibling
+    }
+
+    if (textContent) {
+      addCopyButton(boldElement, textContent)
+    }
+  }
+
+  function handleUnitField(boldElement) {
+    let currentNode = boldElement.nextSibling
+    let addressLines = []
+    let currentLine = ''
+
+    // Collect address content until we hit phone numbers or next <b> tag
+    while (currentNode) {
+      if (currentNode.nodeName === 'B') {
+        break
+      }
+
+      if (currentNode.nodeType === Node.TEXT_NODE) {
+        const text = currentNode.textContent.trim()
+
+        // Check if this line contains a phone label (Mobile:, Office:, Home:)
+        const phoneMatch = text.match(/^(Mobile|Office|Home):\s*(.+)/)
+        if (phoneMatch) {
+          // Stop collecting address lines
+          if (currentLine) {
+            addressLines.push(currentLine)
+            currentLine = ''
           }
 
-          const wrapper = document.createElement('span')
-          wrapper.className = 'quote-wrapper'
+          // Add copy button for this phone number
+          const phoneLabel = phoneMatch[1]
+          const phoneNumber = phoneMatch[2].trim()
+          addPhoneCopyButton(currentNode, phoneLabel, phoneNumber)
 
-          const quoteSpan = document.createElement('span')
-          quoteSpan.textContent = `${quoted}`
-
-          const btn = document.createElement('button')
-          btn.className = 'copy-btn'
-          btn.innerHTML = `<span class="copy-icon">📋</span>`
-
-          btn.addEventListener('click', () => {
-            navigator.clipboard.writeText(quoted)
-            btn.innerHTML = '✅'
-            setTimeout(
-              () => (btn.innerHTML = `<span class="copy-icon">📋</span>`),
-              1000
-            )
-          })
-
-          wrapper.appendChild(quoteSpan)
-          wrapper.appendChild(btn)
-
-          fragments.push(wrapper)
-
-          lastIndex = regex.lastIndex
+          // Continue to next node to process remaining phones
+          currentNode = currentNode.nextSibling
+          continue
         }
 
-        if (lastIndex < text.length) {
-          fragments.push(document.createTextNode(text.slice(lastIndex)))
+        if (text) {
+          currentLine += (currentLine ? ' ' : '') + text
         }
-
-        if (fragments.length > 0) {
-          const parent = node.parentNode
-          fragments.forEach((f) => parent.insertBefore(f, node))
-          parent.removeChild(node)
+      } else if (currentNode.nodeName === 'BR') {
+        if (currentLine) {
+          addressLines.push(currentLine)
+          currentLine = ''
         }
-      } else if (node.nodeType === Node.ELEMENT_NODE) {
-        // Prevent processing our own buttons if run multiple times
-        if (node.classList.contains('copy-btn')) return
-        ;[...node.childNodes].forEach(processNode)
       }
+
+      currentNode = currentNode.nextSibling
     }
-    processNode(target)
+
+    // Don't forget the last address line if there's no trailing <br>
+    if (currentLine && !currentLine.match(/^(Mobile|Office|Home):/)) {
+      addressLines.push(currentLine)
+    }
+
+    const fullAddress = addressLines.join('\n')
+
+    if (fullAddress) {
+      addCopyButton(boldElement, fullAddress)
+    }
+  }
+
+  function addPhoneCopyButton(textNode, label, phoneNumber) {
+    // Create a wrapper span to hold the formatted content
+    const wrapper = document.createElement('span')
+    wrapper.style.position = 'relative'
+    wrapper.style.display = 'inline-block'
+
+    // Create label span
+    const labelSpan = document.createElement('span')
+    labelSpan.textContent = `${label}: ${phoneNumber}`
+
+    // Create copy button
+    const btn = document.createElement('button')
+    btn.className = 'copy-btn phone-copy-btn'
+    btn.style.marginLeft = '8px'
+    btn.style.verticalAlign = 'middle'
+    btn.innerHTML = `<span class="copy-icon">📋</span>`
+
+    wrapper.appendChild(labelSpan)
+    wrapper.appendChild(btn)
+
+    // Replace the text node with our wrapper
+    textNode.parentNode.insertBefore(wrapper, textNode)
+    textNode.textContent = '' // Clear original text
+
+    btn.addEventListener('click', () => {
+      navigator.clipboard.writeText(phoneNumber)
+      btn.innerHTML = '✅'
+      setTimeout(
+        () => (btn.innerHTML = `<span class="copy-icon">📋</span>`),
+        1000
+      )
+    })
+  }
+
+  function addCopyButton(element, textToCopy) {
+    // Create wrapper for the bold element
+    const wrapper = document.createElement('span')
+    wrapper.className = 'field-wrapper'
+    wrapper.style.position = 'relative'
+    wrapper.style.display = 'inline-block'
+
+    element.parentNode.insertBefore(wrapper, element)
+    wrapper.appendChild(element)
+
+    // Create copy button
+    const btn = document.createElement('button')
+    btn.className = 'copy-btn field-copy-btn'
+    btn.style.marginLeft = '8px'
+    btn.style.verticalAlign = 'middle'
+    btn.innerHTML = `<span class="copy-icon">📋</span>`
+
+    wrapper.appendChild(btn)
+
+    btn.addEventListener('click', () => {
+      navigator.clipboard.writeText(textToCopy)
+      btn.innerHTML = '✅'
+      setTimeout(
+        () => (btn.innerHTML = `<span class="copy-icon">📋</span>`),
+        1000
+      )
+    })
   }
 
   function addTextareaFormatter() {
